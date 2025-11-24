@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <title>XML Stok Birleştirme Aracı</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+    integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+    crossorigin="anonymous"
+  >
+  <style>
+    body {
+      background: #f5f7fb;
+    }
+    .navbar-brand span {
+      font-weight: 600;
+    }
+    .card-shadow {
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      border-radius: 16px;
+    }
+    .badge-feed {
+      font-family: monospace;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="#">
+      <span>XML Stock Merge</span>
+    </a>
+  </div>
+</nav>
+
+<div class="container py-4 py-md-5">
+
+  <div class="row mb-4">
+    <div class="col-lg-8 mx-auto">
+      <div class="card card-shadow border-0">
+        <div class="card-body p-4 p-md-5">
+          <h1 class="h4 mb-3">XML Stock Merge</h1>
+          <p class="text-muted mb-4">
+            Bu araç, mağaza XML feed'iniz ile tedarikçi XML feed'ini arkada birleştirir,
+            stokları toplar ve <strong>tek bir XML linki</strong> olarak sunar.
+          </p>
+
+          <form id="run-form" method="get" action="/ui" class="mb-4">
+            <input type="hidden" name="run" value="true">
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Mağaza Feed URL</label>
+                <input
+                  type="url"
+                  class="form-control"
+                  name="store_url"
+                  value="{{ store_url }}"
+                  placeholder="https://example.com/store.xml"
+                >
+                <small class="text-muted">Boş bırakılırsa .env içindeki STORE_FEED_URL kullanılır.</small>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Tedarikçi Feed URL</label>
+                <input
+                  type="url"
+                  class="form-control"
+                  name="supplier_url"
+                  value="{{ supplier_url }}"
+                  placeholder="https://example.com/supplier.xml"
+                >
+                <small class="text-muted">Boş bırakılırsa .env içindeki SUPPLIER_FEED_URL kullanılır.</small>
+              </div>
+            </div>
+            <div class="row g-3 align-items-end">
+              <div class="col-md-4">
+                <div class="mb-2">
+                  <label class="form-label fw-semibold">Eşleştirme Alanı</label>
+                  <select name="key_field" class="form-select">
+                    <option value="barkod" {% if key_field == 'barkod' %}selected{% endif %}>barkod</option>
+                    <option value="stokKodu" {% if key_field == 'stokKodu' %}selected{% endif %}>stokKodu</option>
+                  </select>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                  Canlı Merge Çalıştır
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <div class="row g-3 align-items-end">
+            <div class="col-12 text-md-end">
+              <p class="mb-1 text-muted">
+                Entegrasyon için XML/CSV linklerin:
+              </p>
+
+              <a
+                href="/export/products-xml/merged?token={{ api_token }}&key_field={{ key_field }}{{ override_suffix }}"
+                target="_blank"
+                class="btn btn-outline-secondary btn-sm"
+              >
+                Birleşik XML Feed'i Aç
+              </a>
+
+              <a
+                href="/export/products-xml/merged?token={{ api_token }}&key_field={{ key_field }}{{ override_suffix }}&download=true"
+                class="btn btn-outline-primary btn-sm ms-2"
+              >
+                XML'i İndir
+              </a>
+
+              <a
+                href="/export/products-xml/merged.csv?token={{ api_token }}&key_field={{ key_field }}{{ override_suffix }}"
+                class="btn btn-success btn-sm ms-2"
+              >
+                CSV (Excel) İndir
+              </a>
+            </div>
+          </div>
+
+          {% if error %}
+          <div class="alert alert-danger mt-4 mb-0">
+            {{ error }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if merged_rows %}
+  <div class="row">
+    <div class="col-lg-10 mx-auto">
+      <div class="card card-shadow border-0">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <div class="d-flex flex-column">
+            <span>Birleştirilmiş Stok Özeti</span>
+            <span class="badge bg-secondary mt-1">
+              Toplam ürün: {{ total_count }}
+            </span>
+          </div>
+          <button
+            class="btn btn-sm btn-outline-secondary"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#stok-table-collapse"
+            aria-expanded="true"
+            aria-controls="stok-table-collapse"
+          >
+            Stok Detaylarını Göster / Gizle
+          </button>
+        </div>
+
+        <div id="stok-table-collapse" class="collapse show">
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm table-striped mb-0 align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th>#</th>
+                    <th style="min-width: 160px;">Barkod / Key</th>
+                    <th style="min-width: 260px;">Ürün Adı</th>
+                    <th class="text-end">Mağaza Stok</th>
+                    <th class="text-end">Tedarikçi Stok</th>
+                    <th class="text-end">Toplam Stok</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in merged_rows %}
+                  <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>
+                      <div class="fw-semibold">{{ row.barkod }}</div>
+                      <div class="text-muted small">{{ row.key }}</div>
+                    </td>
+                    <td>{{ row.urunAdi }}</td>
+                    <td class="text-end">{{ row.stok_magaza }}</td>
+                    <td class="text-end">{{ row.stok_tedarikci }}</td>
+                    <td class="text-end fw-bold">{{ row.stok_toplam }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% if total_count > merged_rows|length %}
+            <div class="p-3 text-center text-muted small">
+              İlk {{ merged_rows|length }} ürün gösteriliyor, toplam {{ total_count }} ürün var.
+              Tam liste XML / CSV çıktısında.
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+{% endif %}
+</div>
+<script
+  src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+  integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+  crossorigin="anonymous"
+></script>
+</body>
+</html>
+
+
+</body>
+</html>
